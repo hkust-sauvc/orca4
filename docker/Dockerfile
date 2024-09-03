@@ -1,154 +1,162 @@
-    <link name="dvl500_base_link">
-      <pose>0 0 0 0 0 0</pose>
-      <inertial>
-        <pose>0 0 0 0 0 0</pose>
-        <mass>3.5</mass>
-        <inertia>
-          <ixx>0.0195872</ixx>
-          <ixy>0</ixy>
-          <ixz>0</ixz>
-          <iyy>0.0195872</iyy>
-          <iyz>0</iyz>
-          <izz>0.0151357</izz>
-        </inertia>
-      </inertial>
-      <velocity_decay/>
-      <gravity>1</gravity>
-      <velocity_decay/>
+FROM osrf/ros:humble-desktop AS base
 
-      <sensor
-        name="nortek_dvl500_300" type="custom"
-        gz:type="dvl">
-        <pose>0 0 0 0 0 0</pose>
-        <always_on>1</always_on>
-        <update_rate>8</update_rate>
-        <topic>/dvl/velocity</topic>
-        <gz:dvl>
-          <type>phased_array</type>
-          <arrangement degrees="true">
-            <beam id="1">
-              <aperture>3</aperture>
-              <rotation>-135</rotation>
-              <tilt>25</tilt>
-            </beam>
-            <beam>
-              <aperture>3</aperture>
-              <rotation>135</rotation>
-              <tilt>25</tilt>
-            </beam>
-            <beam>
-              <aperture>3</aperture>
-              <rotation>45</rotation>
-              <tilt>25</tilt>
-            </beam>
-            <beam>
-              <aperture>3</aperture>
-              <rotation>-45</rotation>
-              <tilt>25</tilt>
-            </beam>
-          </arrangement>
-          <tracking>
-            <water_mass_mode>
-              <when>best</when>
-              <water_velocity>
-                <x>0.</x>
-                <y>0.</y>
-                <z>0.</z>
-              </water_velocity>
-              <boundaries>
-                <near>10.</near>
-                <far>100.</far>
-              </boundaries>
-              <bins>10</bins>
-              <noise type="gaussian">
-                <stddev>0.015</stddev>
-              </noise>
-              <visualize>true</visualize>
-            </water_mass_mode>
-            <bottom_mode>
-              <when>best</when>
-              <noise type="gaussian">
-                <stddev>0.005</stddev>
-              </noise>
-              <visualize>true</visualize>
-            </bottom_mode>
-          </tracking>
-          <maximum_range>200.</maximum_range>
-          <minimum_range>0.3</minimum_range>
-          <!-- ENU to FSD -->
-          <reference_frame>0 0 0 3.14 0 -1.57</reference_frame>
-        </gz:dvl>
-      </sensor>
+ARG USERNAME=orca4
+ARG USER_UID=1000
+ARG USER_GID=$USER_UID
+ARG DEBIAN_FRONTEND=noninteractive
 
-      <self_collide>0</self_collide>
-      <enable_wind>0</enable_wind>
-      <kinematic>0</kinematic>
-      <visual name="dvl500_base_link_visual">
-        <pose>0 0 0 0 0 3.14159</pose>
-        <geometry>
-          <mesh>
-            <scale>1 1 1</scale>
-            <!-- Mesh is actually for a Nortek DVL1000-4000m for now -->
-            <uri>model://meshes/nortek_dvl500_300/DVL500-300m.dae</uri>
-          </mesh>
-        </geometry>
-        <transparency>0</transparency>
-        <cast_shadows>1</cast_shadows>
-      </visual>
-      <collision name="dvl500_base_link_collision">
-        <laser_retro>0</laser_retro>
-        <max_contacts>10</max_contacts>
-        <pose>0 0 0 3.14159 0 0</pose>
-        <geometry>
-          <cylinder>
-            <radius>0.093</radius>
-            <length>0.203</length>
-          </cylinder>
-        </geometry>
-        <surface>
-          <friction>
-            <ode>
-              <mu>1</mu>
-              <mu2>1</mu2>
-              <fdir1>0 0 0</fdir1>
-              <slip1>0</slip1>
-              <slip2>0</slip2>
-            </ode>
-            <torsional>
-              <coefficient>1</coefficient>
-              <patch_radius>0</patch_radius>
-              <surface_radius>0</surface_radius>
-              <use_patch_radius>1</use_patch_radius>
-              <ode>
-                <slip>0</slip>
-              </ode>
-            </torsional>
-          </friction>
-          <bounce>
-            <restitution_coefficient>0</restitution_coefficient>
-            <threshold>1e+06</threshold>
-          </bounce>
-          <contact>
-            <collide_without_contact>0</collide_without_contact>
-            <collide_without_contact_bitmask>1</collide_without_contact_bitmask>
-            <collide_bitmask>1</collide_bitmask>
-            <ode>
-              <soft_cfm>0</soft_cfm>
-              <soft_erp>0.2</soft_erp>
-              <kp>1e+13</kp>
-              <kd>1</kd>
-              <max_vel>0.01</max_vel>
-              <min_depth>0</min_depth>
-            </ode>
-            <bullet>
-              <split_impulse>1</split_impulse>
-              <split_impulse_penetration_threshold>-0.01</split_impulse_penetration_threshold>
-              <soft_cfm>0</soft_cfm>
-              <soft_erp>0.2</soft_erp>
-              <kp>1e+13</kp>
-              <kd>1</kd>
-            </bullet>
-          </contact>
-        </surface>
-      </collision>
-    </link>
+RUN apt-get update && apt-get upgrade -y
+
+# Install a few handy tools
+RUN apt-get update \
+  && apt-get -y --quiet --no-install-recommends install \
+    bash-completion \
+    build-essential \
+    git \
+    glmark2 \
+    gnupg \
+    iputils-ping \
+    lsb-release \
+    mlocate \
+    software-properties-common \
+    sudo \
+    wget \
+    vim \
+  && rm -rf /var/lib/apt/lists/*
+
+# Install Gazebo Garden
+RUN wget https://packages.osrfoundation.org/gazebo.gpg -O /usr/share/keyrings/pkgs-osrf-archive-keyring.gpg
+RUN echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/pkgs-osrf-archive-keyring.gpg] http://packages.osrfoundation.org/gazebo/ubuntu-stable $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/gazebo-stable.list > /dev/null
+RUN apt-get update \
+  && apt-get -y --quiet --no-install-recommends install \
+    gz-harmonic \
+  && rm -rf /var/lib/apt/lists/*
+
+# Install NVIDIA software
+RUN apt-get update \
+ && apt-get -y --quiet --no-install-recommends install \
+    libglvnd0 \
+    libgl1 \
+    libglx0 \
+    libegl1 \
+    libxext6 \
+    libx11-6 \
+  && rm -rf /var/lib/apt/lists/* \
+ENV NVIDIA_VISIBLE_DEVICES=all
+ENV NVIDIA_DRIVER_CAPABILITIES=graphics,utility,compute
+ENV QT_X11_NO_MITSHM=1
+
+# Install some ardupilot and ardupilot_gazebo prereqs
+RUN apt-get update \
+ && apt-get -y --quiet --no-install-recommends install \
+    python3-wxgtk4.0 \
+    rapidjson-dev \
+    xterm \
+  && rm -rf /var/lib/apt/lists/*
+
+# Create a non-root user
+# Required for ArduSub install, but generally a good idea
+RUN groupadd --gid $USER_GID $USERNAME \
+  && useradd -s /bin/bash --uid $USER_UID --gid $USER_GID -m $USERNAME \
+  && echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME \
+  && chmod 0440 /etc/sudoers.d/$USERNAME \
+  && echo "\n# Added by orca4 Dockerfile:" >> /home/$USERNAME/.bashrc \
+  && echo "source /usr/share/bash-completion/completions/git" >> /home/$USERNAME/.bashrc
+
+# Switch to our new user
+USER $USERNAME
+ENV USER=$USERNAME
+
+# Clone ArduSub code
+WORKDIR /home/$USERNAME
+RUN git clone https://github.com/ArduPilot/ardupilot.git --recurse-submodules
+
+# Install ArduSub prereqs (this also appends to .bashrc)
+WORKDIR /home/$USERNAME/ardupilot
+ENV SKIP_AP_EXT_ENV=1 SKIP_AP_GRAPHIC_ENV=1 SKIP_AP_COV_ENV=1 SKIP_AP_GIT_CHECK=1
+RUN Tools/environment_install/install-prereqs-ubuntu.sh -y
+
+# Build ArduSub
+# Note: waf will capture all of the environment variables in ardupilot/.lock-waf_linux_build.
+# Any change to enviroment variables will cause a re-build.
+# To avoid this call sim_vehicle.py with the "--no-rebuild" option.
+WORKDIR /home/$USERNAME/ardupilot
+RUN modules/waf/waf-light configure --board sitl \
+  && modules/waf/waf-light build --target bin/ardusub
+
+# Clone ardupilot_gazebo code
+WORKDIR /home/$USERNAME
+RUN git clone https://github.com/ArduPilot/ardupilot_gazebo.git
+
+# Build for Gazebo Garden, define this before building ardupilot_gazebo and ros_gz
+ENV GZ_VERSION=harmonic
+
+# Build ardupilot_gazebo
+RUN [ "/bin/bash" , "-c" , " \
+  cd ardupilot_gazebo \
+  && git checkout 4945088 \
+  && mkdir build \
+  && cd build \
+  && cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+  && make -j4" ]
+
+# Break orca4 build into multiple stages to speed up 'docker build':
+# -- work that depends on workspace.repos
+# -- work that depends on orca4 package.xml files
+# -- everything else
+
+# Create colcon workspace and copy workspace.repos file
+WORKDIR /home/$USERNAME
+RUN mkdir -p colcon_ws/src/orca4
+COPY --chown=$USER_UID:$USER_GID workspace.repos colcon_ws/src/orca4
+
+# Get workspace repos
+WORKDIR /home/$USERNAME/colcon_ws/src
+RUN vcs import < orca4/workspace.repos
+
+# Run rosdep over workspace repos
+# Note: ros_gz asks for some Gazebo Garden keys which are not yet present in rosdistro.
+# This is fine, since Gazebo Garden has already been installed.
+WORKDIR /home/$USERNAME/colcon_ws
+RUN rosdep update \
+  && rosdep install -y --from-paths . --ignore-src --skip-keys="gz-transport13 gz-sim8 gz-math7 gz-msgs10"
+
+# Build everything so far
+RUN [ "/bin/bash" , "-c" , "\
+  source /opt/ros/humble/setup.bash \
+  && colcon build" ]
+
+# Copy orca4 package.xml files
+COPY --chown=$USER_UID:$USER_GID orca_base/package.xml src/orca4/orca_base/
+COPY --chown=$USER_UID:$USER_GID orca_bringup/package.xml src/orca4/orca_bringup/
+COPY --chown=$USER_UID:$USER_GID orca_description/package.xml src/orca4/orca_description/
+COPY --chown=$USER_UID:$USER_GID orca_msgs/package.xml src/orca4/orca_msgs/
+COPY --chown=$USER_UID:$USER_GID orca_nav2/package.xml src/orca4/orca_nav2/
+COPY --chown=$USER_UID:$USER_GID orca_shared/package.xml src/orca4/orca_shared/
+
+# Run rosdep over orca4 package.xml files
+RUN rosdep update \
+  && rosdep install -y --from-paths . --ignore-src --skip-keys="gz-transport13 gz-sim8 gz-math7 gz-msgs10"
+
+# MAVROS depends on GeographicLib, and GeographicLib needs some datasets
+RUN [ "/bin/bash" , "-c" , "\
+  wget https://raw.githubusercontent.com/mavlink/mavros/master/mavros/scripts/install_geographiclib_datasets.sh \
+  && chmod +x install_geographiclib_datasets.sh \
+  && sudo ./install_geographiclib_datasets.sh" ]
+
+# Copy everything
+COPY --chown=$USER_UID:$USER_GID . src/orca4
+
+# Build everything
+RUN [ "/bin/bash" , "-c" , "\
+  source /opt/ros/humble/setup.bash \
+  && colcon build" ]
+
+# Set up the environment
+WORKDIR /home/$USERNAME/colcon_ws
+RUN echo "export PATH=/home/$USERNAME/.local/bin:\$PATH" >> /home/$USERNAME/.bashrc \
+  && echo "export PATH=/home/$USERNAME/.local/lib/python3.10/site-packages:\$PATH" >> /home/$USERNAME/.bashrc \
+  && echo "source /home/$USERNAME/colcon_ws/src/orca4/setup.bash" >> /home/$USERNAME/.bashrc
+
+# Required to use the --console option on sim_vehicle.py:
+# RUN pip3 install matplotlib
